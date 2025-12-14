@@ -5,9 +5,9 @@ package.domain = org.eduforge
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,ttf,txt,json,atlas
 
-version = 0.2
+version = 0.4
 
-requirements = python3,kivy==2.3.0,kivymd==1.2.0,requests
+requirements = python3,kivy==2.3.0,kivymd==1.2.0,requests,certifi
 
 orientation = portrait
 fullscreen = 0
