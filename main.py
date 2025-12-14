@@ -1,182 +1,212 @@
-from kivymd.app import MDApp
-
-# Screens/ScreenManager: keep compatible across KivyMD versions
-try:
-    from kivymd.uix.screen import MDScreen as Screen
-except Exception:
-    from kivy.uix.screenmanager import Screen
-from kivy.uix.screenmanager import ScreenManager
-
-from kivymd.uix.textfield import MDTextField
-from kivymd.uix.button import MDFillRoundFlatIconButton, MDRectangleFlatIconButton
-from kivymd.uix.label import MDLabel
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.gridlayout import MDGridLayout
-from kivymd.uix.bottomnavigation import MDBottomNavigation, MDBottomNavigationItem
-from kivymd.uix.card import MDCard
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import MDList, TwoLineAvatarIconListItem, IconLeftWidget
-from kivymd.uix.progressbar import MDProgressBar
-from kivymd.uix.toolbar import MDTopAppBar
-from kivymd.uix.pickers import MDDatePicker
-from kivymd.toast import toast
+import os
+import traceback
+from datetime import date, datetime
 
 import requests
-from datetime import date, datetime
+
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivymd.app import MDApp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.uix.textfield import MDTextField
+from kivymd.uix.button import MDRaisedButton, MDFlatButton
+from kivymd.uix.list import MDList, TwoLineListItem
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.toast import toast
 
 # ==========================================
 # PASTE YOUR GOOGLE SCRIPT URL BELOW
 # ==========================================
-GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyOlcVfdYgKM6zbPR33IYkrp5EmkMbzKbNNpcrOaDQdNd_pT0tGI8x-YpdZfblb9dlFkCKpx7a1mcu5KUeHhH7Ju4842xGo0lswS6VZmP/exec'
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOlcVfdYgKM6zbPR33IYkrp5EmkMbzKbNNpcrOaDQdNd_pT0tGI8x-YpdZfblb9dlFkCKpx7a1mcu5KUeHhH7Ju4842xGo0lswS6VZmP/exec"
 # ==========================================
-
-CURRENT_USER = ""
 
 
 class LoginScreen(Screen):
     pass
 
 
-class MainAppScreen(Screen):
+class AddScreen(Screen):
+    pass
+
+
+class AnalyticsScreen(Screen):
+    pass
+
+
+class HistoryScreen(Screen):
     pass
 
 
 class FamilyExpenseApp(MDApp):
     def build(self):
+        self.current_user = ""
+        self.error_file = None
+
+        # Theme (keep minimal for compatibility)
         self.theme_cls.primary_palette = "Indigo"
-        # Some KivyMD versions removed accent_palette; keep app compatible.
-        if hasattr(self.theme_cls, "accent_palette"):
-            self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
 
+        # set crash log path early
+        try:
+            self.error_file = os.path.join(self.user_data_dir, "crash_log.txt")
+        except Exception:
+            self.error_file = "crash_log.txt"
+
+        # Wrap UI build to prevent “instant close”
+        try:
+            return self._build_ui()
+        except Exception:
+            err = traceback.format_exc()
+            self._write_crash(err)
+            # Show error on screen instead of closing
+            box = MDBoxLayout(orientation="vertical", padding="20dp", spacing="10dp")
+            box.add_widget(MDLabel(text="App Error on Start ❌", halign="center", font_style="H6"))
+            box.add_widget(MDLabel(text="crash_log.txt file created.", halign="center"))
+            box.add_widget(MDLabel(text="(Rebuild after fixing)", halign="center"))
+            return box
+
+    def _build_ui(self):
         self.sm = ScreenManager()
 
-        # ==================================
-        # SCREEN 1: LOGIN
-        # ==================================
-        login_screen = LoginScreen(name='login')
-        layout_login = MDBoxLayout(orientation='vertical', padding="40dp", spacing="20dp")
+        # ---------------- LOGIN ----------------
+        login = LoginScreen(name="login")
+        login_box = MDBoxLayout(orientation="vertical", padding="30dp", spacing="15dp")
 
-        layout_login.add_widget(MDLabel(text="Family Finance Login", halign="center", font_style="H5"))
+        login_box.add_widget(MDLabel(text="Family Finance Login", halign="center", font_style="H5"))
 
-        self.login_username = MDTextField(hint_text="Enter Name (Akshay/Monika/Abhimanyu)", mode="rectangle")
-        layout_login.add_widget(self.login_username)
+        self.login_username = MDTextField(
+            hint_text="Enter Name (Akshay/Monika/Abhimanyu)",
+            mode="rectangle",
+        )
+        login_box.add_widget(self.login_username)
 
-        btn_login = MDFillRoundFlatIconButton(text="LOGIN", icon="login", size_hint_x=1)
-        btn_login.md_bg_color = self.theme_cls.primary_color
+        btn_login = MDRaisedButton(text="LOGIN")
         btn_login.bind(on_release=self.login_user)
-        layout_login.add_widget(btn_login)
+        login_box.add_widget(btn_login)
 
-        login_screen.add_widget(layout_login)
-        self.sm.add_widget(login_screen)
+        login.add_widget(login_box)
+        self.sm.add_widget(login)
 
-        # ==================================
-        # SCREEN 2: MAIN APP (NAVIGATION)
-        # ==================================
-        main_screen = MainAppScreen(name='main')
+        # ---------------- MAIN WRAPPER ----------------
+        main_wrapper = Screen(name="main")
 
-        root_layout = MDBoxLayout(orientation='vertical')
+        root = MDBoxLayout(orientation="vertical")
 
-        toolbar = MDTopAppBar(title="Family Finance Tracker")
-        toolbar.elevation = 10
-        root_layout.add_widget(toolbar)
+        # Top title (simple label instead of toolbar to avoid version issues)
+        self.title_label = MDLabel(
+            text="Family Finance Tracker",
+            halign="center",
+            font_style="H6",
+            size_hint_y=None,
+            height="48dp",
+        )
+        root.add_widget(self.title_label)
 
-        nav = MDBottomNavigation()
+        # Content ScreenManager for tabs
+        self.content_sm = ScreenManager()
 
-        # --- TAB 1: ADD ENTRY ---
-        self.screen_add = MDBottomNavigationItem(name='screen_add', text='Add', icon='plus-circle')
-        scroll_add = MDScrollView()
-        layout_add = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
-        layout_add.bind(minimum_height=layout_add.setter('height'))
+        # ---------- ADD TAB ----------
+        add_scr = AddScreen(name="add")
+        add_box = MDBoxLayout(orientation="vertical", padding="20dp", spacing="12dp")
 
-        self.amount_input = MDTextField(hint_text="Amount", icon_right="currency-inr", mode="rectangle", input_filter="int")
-        layout_add.add_widget(self.amount_input)
+        self.amount_input = MDTextField(hint_text="Amount", mode="rectangle", input_filter="int")
+        self.category_input = MDTextField(hint_text="Category (Food/Rent/etc.)", mode="rectangle")
+        self.desc_input = MDTextField(hint_text="Description (optional)", mode="rectangle")
 
-        self.category_input = MDTextField(hint_text="Category (Food/Rent/etc.)", icon_right="tag", mode="rectangle")
-        layout_add.add_widget(self.category_input)
+        add_box.add_widget(self.amount_input)
+        add_box.add_widget(self.category_input)
+        add_box.add_widget(self.desc_input)
 
-        self.desc_input = MDTextField(hint_text="Description", icon_right="notebook-edit", mode="rectangle")
-        layout_add.add_widget(self.desc_input)
-
-        btn_save = MDFillRoundFlatIconButton(text="SAVE ENTRY", icon="content-save", size_hint_x=1, padding="15dp")
-        btn_save.md_bg_color = self.theme_cls.primary_color
+        btn_save = MDRaisedButton(text="SAVE ENTRY")
         btn_save.bind(on_release=self.send_data)
-        layout_add.add_widget(btn_save)
+        add_box.add_widget(btn_save)
 
-        self.status_label = MDLabel(text="Ready", halign="center", theme_text_color="Hint", font_style="Caption")
-        layout_add.add_widget(self.status_label)
+        self.status_label = MDLabel(text="Ready", halign="center")
+        add_box.add_widget(self.status_label)
 
-        scroll_add.add_widget(layout_add)
-        self.screen_add.add_widget(scroll_add)
+        add_scr.add_widget(add_box)
+        self.content_sm.add_widget(add_scr)
 
-        # --- TAB 2: DASHBOARD ---
-        self.screen_dash = MDBottomNavigationItem(name='screen_analytics', text='Analytics', icon='chart-bar',
-                                                  on_tab_press=self.refresh_dashboard)
+        # ---------- ANALYTICS TAB ----------
+        ana_scr = AnalyticsScreen(name="analytics")
+        ana_outer = MDBoxLayout(orientation="vertical", padding="20dp", spacing="12dp")
 
-        scroll_dash = MDScrollView()
-        dash_layout = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
-        dash_layout.bind(minimum_height=dash_layout.setter('height'))
+        self.lbl_month_exp = MDLabel(text="Monthly Expense: ₹0", halign="center", font_style="H6")
+        self.lbl_savings = MDLabel(text="Savings: ₹0", halign="center", font_style="H6")
+        ana_outer.add_widget(self.lbl_month_exp)
+        ana_outer.add_widget(self.lbl_savings)
 
-        self.lbl_month_exp = MDLabel(text="Monthly Expense: ₹0", font_style="H6", halign="center")
-        dash_layout.add_widget(self.lbl_month_exp)
+        btn_refresh = MDRaisedButton(text="REFRESH ANALYTICS")
+        btn_refresh.bind(on_release=self.refresh_dashboard)
+        ana_outer.add_widget(btn_refresh)
 
-        self.lbl_savings = MDLabel(text="Savings: ₹0", font_style="H6", halign="center")
-        dash_layout.add_widget(self.lbl_savings)
+        ana_outer.add_widget(MDLabel(text="Distribution:", font_style="Subtitle1"))
 
-        dash_layout.add_widget(MDLabel(text="Expense Distribution", font_style="Subtitle1"))
-        self.chart_box = MDBoxLayout(orientation='vertical', spacing="10dp", size_hint_y=None)
-        self.chart_box.bind(minimum_height=self.chart_box.setter('height'))
-        dash_layout.add_widget(self.chart_box)
+        self.dist_list = MDList()
+        dist_scroll = MDScrollView()
+        dist_scroll.add_widget(self.dist_list)
+        ana_outer.add_widget(dist_scroll)
 
-        scroll_dash.add_widget(dash_layout)
-        self.screen_dash.add_widget(scroll_dash)
+        ana_scr.add_widget(ana_outer)
+        self.content_sm.add_widget(ana_scr)
 
-        # --- TAB 3: HISTORY ---
-        self.screen_history = MDBottomNavigationItem(name='screen_history', text='History', icon='history')
+        # ---------- HISTORY TAB ----------
+        hist_scr = HistoryScreen(name="history")
+        hist_outer = MDBoxLayout(orientation="vertical", padding="20dp", spacing="12dp")
 
-        scroll_hist = MDScrollView()
-        hist_layout = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
-        hist_layout.bind(minimum_height=hist_layout.setter('height'))
+        self.date_input = MDTextField(
+            hint_text="Date (YYYY-MM-DD) e.g. 2025-12-14",
+            mode="rectangle",
+        )
+        hist_outer.add_widget(self.date_input)
 
-        # Filter Row
-        filter_row = MDBoxLayout(orientation='horizontal', spacing="10dp", size_hint_y=None, height="60dp")
-
-        self.date_input = MDTextField(hint_text="Select Date", mode="rectangle", readonly=True)
-        self.date_input.bind(on_focus=self.show_date_picker)
-        filter_row.add_widget(self.date_input)
-
-        btn_filter = MDRectangleFlatIconButton(text="Filter", icon="filter", size_hint_x=None, width="120dp")
+        btn_filter = MDRaisedButton(text="LOAD HISTORY")
         btn_filter.bind(on_release=self.filter_history)
-        filter_row.add_widget(btn_filter)
+        hist_outer.add_widget(btn_filter)
 
-        hist_layout.add_widget(filter_row)
-
-        # History list
         self.history_list = MDList()
-        scroll_hist.add_widget(self.history_list)
+        hist_scroll = MDScrollView()
+        hist_scroll.add_widget(self.history_list)
+        hist_outer.add_widget(hist_scroll)
 
-        self.screen_history.add_widget(scroll_hist)
+        hist_scr.add_widget(hist_outer)
+        self.content_sm.add_widget(hist_scr)
 
-        # Add all tabs
-        nav.add_widget(self.screen_add)
-        nav.add_widget(self.screen_dash)
-        nav.add_widget(self.screen_history)
+        root.add_widget(self.content_sm)
 
-        root_layout.add_widget(nav)
-        main_screen.add_widget(root_layout)
+        # Bottom buttons (safe)
+        bottom = MDBoxLayout(orientation="horizontal", size_hint_y=None, height="56dp", padding="6dp", spacing="6dp")
 
-        self.sm.add_widget(main_screen)
+        btn_add = MDFlatButton(text="ADD")
+        btn_add.bind(on_release=lambda x: self.switch_tab("add"))
+
+        btn_ana = MDFlatButton(text="ANALYTICS")
+        btn_ana.bind(on_release=lambda x: self.switch_tab("analytics"))
+
+        btn_hist = MDFlatButton(text="HISTORY")
+        btn_hist.bind(on_release=lambda x: self.switch_tab("history"))
+
+        bottom.add_widget(btn_add)
+        bottom.add_widget(btn_ana)
+        bottom.add_widget(btn_hist)
+
+        root.add_widget(bottom)
+
+        main_wrapper.add_widget(root)
+        self.sm.add_widget(main_wrapper)
 
         return self.sm
+
+    def switch_tab(self, name):
+        self.content_sm.current = name
 
     # ==========================
     # LOGIN
     # ==========================
     def login_user(self, instance):
-        global CURRENT_USER
-        user = self.login_username.text.strip()
+        user = (self.login_username.text or "").strip()
         if user in ["Akshay", "Monika", "Abhimanyu"]:
-            CURRENT_USER = user
+            self.current_user = user
             toast(f"Welcome {user}")
             self.sm.current = "main"
         else:
@@ -186,18 +216,21 @@ class FamilyExpenseApp(MDApp):
     # SEND DATA TO GOOGLE SHEET
     # ==========================
     def send_data(self, instance):
-        global CURRENT_USER
+        amount = (self.amount_input.text or "").strip()
+        category = (self.category_input.text or "").strip()
+        desc = (self.desc_input.text or "").strip()
 
-        amount = self.amount_input.text.strip()
-        category = self.category_input.text.strip()
-        desc = self.desc_input.text.strip()
+        if not self.current_user:
+            toast("Please login first")
+            self.sm.current = "login"
+            return
 
         if not amount or not category:
             toast("Enter amount & category")
             return
 
         data = {
-            "user": CURRENT_USER,
+            "user": self.current_user,
             "amount": amount,
             "category": category,
             "desc": desc,
@@ -207,112 +240,97 @@ class FamilyExpenseApp(MDApp):
 
         try:
             self.status_label.text = "Saving..."
-            response = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15)
+            r = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=20)
 
-            if response.status_code == 200:
-                toast("Saved Successfully ✅")
+            if r.status_code == 200:
+                toast("Saved ✅")
                 self.amount_input.text = ""
                 self.category_input.text = ""
                 self.desc_input.text = ""
                 self.status_label.text = "Saved ✅"
             else:
-                toast("Error Saving ❌")
+                toast(f"Save failed ({r.status_code})")
                 self.status_label.text = "Error"
-
-        except Exception as e:
-            toast("Network Error")
-            self.status_label.text = "Network Error"
-            print("Send Error:", e)
-
-    # ==========================
-    # DATE PICKER
-    # ==========================
-    def show_date_picker(self, instance, value):
-        if value:
-            picker = MDDatePicker()
-            picker.bind(on_save=self.set_date)
-            picker.open()
-
-    def set_date(self, instance, value, date_range):
-        self.date_input.text = str(value)
+        except Exception:
+            err = traceback.format_exc()
+            self._write_crash(err)
+            toast("Network/Server error")
+            self.status_label.text = "Network/Server error"
 
     # ==========================
-    # FILTER HISTORY
+    # HISTORY
     # ==========================
     def filter_history(self, instance):
-        sel_date = self.date_input.text.strip()
+        sel_date = (self.date_input.text or "").strip()
         if not sel_date:
-            toast("Select date first")
+            toast("Enter date (YYYY-MM-DD)")
             return
 
         try:
             self.history_list.clear_widgets()
-            response = requests.get(GOOGLE_SCRIPT_URL + f"?action=history&date={sel_date}", timeout=15)
-            data = response.json()
 
-            if len(data) == 0:
+            r = requests.get(f"{GOOGLE_SCRIPT_URL}?action=history&date={sel_date}", timeout=20)
+            data = r.json() if r.status_code == 200 else []
+
+            if not data:
                 toast("No entries found")
                 return
 
             for row in data:
-                item = TwoLineAvatarIconListItem(
-                    text=f"₹{row['amount']} - {row['category']}",
-                    secondary_text=f"{row['user']} | {row['desc']}"
-                )
-                item.add_widget(IconLeftWidget(icon="cash"))
-                self.history_list.add_widget(item)
+                text = f"₹{row.get('amount','')} - {row.get('category','')}"
+                sub = f"{row.get('user','')} | {row.get('desc','')}"
+                self.history_list.add_widget(TwoLineListItem(text=text, secondary_text=sub))
 
-        except Exception as e:
+        except Exception:
+            err = traceback.format_exc()
+            self._write_crash(err)
             toast("Error loading history")
-            print("History Error:", e)
 
     # ==========================
-    # DASHBOARD
+    # ANALYTICS
     # ==========================
-    def refresh_dashboard(self, *args):
+    def refresh_dashboard(self, instance):
         try:
-            response = requests.get(GOOGLE_SCRIPT_URL + "?action=dashboard", timeout=15)
-            data = response.json()
+            self.dist_list.clear_widgets()
 
-            m_exp = float(data.get("monthly_expense", 0))
-            savings = float(data.get("savings", 0))
-            dist_data = data.get("distribution", {})
+            r = requests.get(f"{GOOGLE_SCRIPT_URL}?action=dashboard", timeout=20)
+            data = r.json() if r.status_code == 200 else {}
 
-            self.lbl_month_exp.text = f"Monthly Expense: ₹{m_exp}"
-            self.lbl_savings.text = f"Savings: ₹{savings}"
+            m_exp = float(data.get("monthly_expense", 0) or 0)
+            savings = float(data.get("savings", 0) or 0)
+            dist = data.get("distribution", {}) or {}
 
-            self.chart_box.clear_widgets()
-            colors = {
-                "Akshay": (0.2, 0.2, 1, 1),
-                "Monika": (1, 0.4, 0.7, 1),
-                "Abhimanyu": (1, 0.6, 0.2, 1),
-                "Family": (0, 0.5, 0.5, 1),
-            }
+            self.lbl_month_exp.text = f"Monthly Expense: ₹{m_exp:.0f}"
+            self.lbl_savings.text = f"Savings: ₹{savings:.0f}"
 
-            for name, val in dist_data.items():
-                if val > 0:
-                    percent = (val / m_exp) * 100 if m_exp > 0 else 0
-                    self.chart_box.add_widget(
-                        MDLabel(
-                            text=f"{name}: ₹{val} ({percent:.1f}%)",
-                            font_style="Caption",
-                            size_hint_y=None,
-                            height="20dp",
-                        )
+            if not dist:
+                self.dist_list.add_widget(TwoLineListItem(text="No distribution data", secondary_text=""))
+                return
+
+            for name, val in dist.items():
+                try:
+                    v = float(val or 0)
+                except Exception:
+                    v = 0
+                self.dist_list.add_widget(
+                    TwoLineListItem(
+                        text=f"{name}: ₹{v:.0f}",
+                        secondary_text="",
                     )
-                    self.chart_box.add_widget(
-                        MDProgressBar(
-                            value=percent,
-                            color=colors.get(name, (0, 0, 1, 1)),
-                            size_hint_y=None,
-                            height="15dp",
-                        )
-                    )
+                )
 
-        except Exception as e:
-            self.lbl_month_exp.text = "Error"
-            print("Dashboard Error:", e)
+        except Exception:
+            err = traceback.format_exc()
+            self._write_crash(err)
+            toast("Analytics error")
+
+    def _write_crash(self, text):
+        try:
+            with open(self.error_file, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception:
+            pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     FamilyExpenseApp().run()
