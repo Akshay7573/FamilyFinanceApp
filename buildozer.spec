@@ -4,9 +4,9 @@ package.name = familyfinance
 package.domain = org.eduforge
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,ttf,txt,json,atlas
-version = 0.1
 
-# ✅ PIN versions (stable)
+version = 0.2
+
 requirements = python3,kivy==2.3.0,kivymd==1.2.0,requests
 
 orientation = portrait
