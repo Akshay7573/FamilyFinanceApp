@@ -37,6 +37,9 @@ fullscreen = 0
 # (int) Android API to use. 33 works well for most.
 android.api = 33
 
+# ✅ ADD THIS LINE (fix for Aidl not found / SDK license in CI)
+android.accept_sdk_license = True
+
 # (int) Minimum API your APK will support
 android.minapi = 21
 
