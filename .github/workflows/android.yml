@@ -1,27 +1,29 @@
 name: Build Android APK (Buildozer)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          workdir: .
-          buildozer_version: stable
-          command: buildozer -v android debug
+      - name: Build APK with kivy/buildozer (Docker)
+        run: |
+          docker pull kivy/buildozer
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/home/user/hostcwd" \
+            -w /home/user/hostcwd \
+            kivy/buildozer \
+            buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FamilyFinance-APK
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/*.apk
