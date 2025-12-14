@@ -1,6 +1,12 @@
 from kivymd.app import MDApp
-from kivymd.uix.screen import Screen
-from kivymd.uix.screenmanager import ScreenManager
+
+# Screens/ScreenManager: keep compatible across KivyMD versions
+try:
+    from kivymd.uix.screen import MDScreen as Screen
+except Exception:
+    from kivy.uix.screenmanager import Screen
+from kivy.uix.screenmanager import ScreenManager
+
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDFillRoundFlatIconButton, MDRectangleFlatIconButton
 from kivymd.uix.label import MDLabel
@@ -14,105 +20,81 @@ from kivymd.uix.progressbar import MDProgressBar
 from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.pickers import MDDatePicker
 from kivymd.toast import toast
+
 import requests
 from datetime import date, datetime
 
 # ==========================================
 # PASTE YOUR GOOGLE SCRIPT URL BELOW
 # ==========================================
-GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypHp24_ZNQ1GI8x-YpdZfblb9dlFkCKpx7a1mcu5KUeHhH7Ju4842xGo0lswS6VZmP/exec' 
+GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyOlcVfdYgKM6zbPR33IYkrp5EmkMbzKbNNpcrOaDQdNd_pT0tGI8x-YpdZfblb9dlFkCKpx7a1mcu5KUeHhH7Ju4842xGo0lswS6VZmP/exec'
 # ==========================================
 
-CURRENT_USER = "" 
+CURRENT_USER = ""
+
 
 class LoginScreen(Screen):
     pass
 
+
 class MainAppScreen(Screen):
     pass
+
 
 class FamilyExpenseApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Indigo"
-        self.theme_cls.accent_palette = "Teal"
+        # Some KivyMD versions removed accent_palette; keep app compatible.
+        if hasattr(self.theme_cls, "accent_palette"):
+            self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
-        
+
         self.sm = ScreenManager()
-        
+
         # ==================================
         # SCREEN 1: LOGIN
         # ==================================
         login_screen = LoginScreen(name='login')
         layout_login = MDBoxLayout(orientation='vertical', padding="40dp", spacing="20dp")
-        
-        layout_login.add_widget(MDLabel(text="", size_hint_y=None, height="50dp")) 
-        layout_login.add_widget(MDLabel(text="Family Finance", halign="center", font_style="H4", bold=True))
-        layout_login.add_widget(MDLabel(text="Secure Login", halign="center", theme_text_color="Hint", font_style="Caption"))
-        
-        self.login_user = MDTextField(hint_text="Username", helper_text="Akshay or Monika", icon_right="account")
-        layout_login.add_widget(self.login_user)
-        
-        self.login_pass = MDTextField(hint_text="Password", password=True, icon_right="key-variant")
-        layout_login.add_widget(self.login_pass)
-        
-        btn_login = MDFillRoundFlatIconButton(text="LOGIN", icon="login", size_hint_x=1, padding="15dp")
-        btn_login.bind(on_release=self.check_login)
+
+        layout_login.add_widget(MDLabel(text="Family Finance Login", halign="center", font_style="H5"))
+
+        self.login_username = MDTextField(hint_text="Enter Name (Akshay/Monika/Abhimanyu)", mode="rectangle")
+        layout_login.add_widget(self.login_username)
+
+        btn_login = MDFillRoundFlatIconButton(text="LOGIN", icon="login", size_hint_x=1)
+        btn_login.md_bg_color = self.theme_cls.primary_color
+        btn_login.bind(on_release=self.login_user)
         layout_login.add_widget(btn_login)
-        layout_login.add_widget(MDLabel())
-        
+
         login_screen.add_widget(layout_login)
         self.sm.add_widget(login_screen)
 
         # ==================================
-        # SCREEN 2: MAIN APP
+        # SCREEN 2: MAIN APP (NAVIGATION)
         # ==================================
-        self.main_screen = MainAppScreen(name='main')
-        main_layout = MDBoxLayout(orientation='vertical')
-        
-        # Toolbar
-        self.toolbar = MDTopAppBar(title="Home", elevation=4, md_bg_color=self.theme_cls.primary_color)
-        self.toolbar.right_action_items = [["refresh", lambda x: self.refresh_dashboard(None)], ["logout", lambda x: self.logout()]]
-        main_layout.add_widget(self.toolbar)
+        main_screen = MainAppScreen(name='main')
 
-        self.nav_bar = MDBottomNavigation()
+        root_layout = MDBoxLayout(orientation='vertical')
+
+        toolbar = MDTopAppBar(title="Family Finance Tracker")
+        toolbar.elevation = 10
+        root_layout.add_widget(toolbar)
+
+        nav = MDBottomNavigation()
 
         # --- TAB 1: ADD ENTRY ---
-        self.screen_add = MDBottomNavigationItem(name='screen1', text='Add', icon='plus-circle')
+        self.screen_add = MDBottomNavigationItem(name='screen_add', text='Add', icon='plus-circle')
         scroll_add = MDScrollView()
-        layout_add = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", adaptive_height=True)
-        
-        # 1. Date Picker
-        layout_add.add_widget(MDLabel(text="Select Date:", theme_text_color="Secondary", font_style="Caption"))
-        self.selected_date_obj = date.today()
-        self.btn_date = MDRectangleFlatIconButton(text=f"Date: {date.today()}", icon="calendar", size_hint_x=1, padding="10dp")
-        self.btn_date.bind(on_release=self.show_date_picker)
-        layout_add.add_widget(self.btn_date)
+        layout_add = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
+        layout_add.bind(minimum_height=layout_add.setter('height'))
 
-        # 2. Type
-        layout_add.add_widget(MDLabel(text="Transaction Type:", theme_text_color="Secondary", font_style="Caption"))
-        type_grid = MDGridLayout(cols=2, spacing="15dp", adaptive_height=True)
-        self.btn_expense = MDFillRoundFlatIconButton(text="EXPENSE", icon="arrow-down-bold", size_hint_x=1, on_release=self.set_type_expense)
-        self.btn_income = MDFillRoundFlatIconButton(text="INCOME", icon="arrow-up-bold", size_hint_x=1, on_release=self.set_type_income)
-        self.btn_expense.md_bg_color = (1, 0.3, 0.3, 1) 
-        self.btn_income.md_bg_color = (0.9, 0.9, 0.9, 1); self.btn_income.text_color = (0, 0, 0, 0.5)
-        type_grid.add_widget(self.btn_expense); type_grid.add_widget(self.btn_income)
-        layout_add.add_widget(type_grid)
-
-        # 3. Person (We create buttons here, but add them later in check_login)
-        layout_add.add_widget(MDLabel(text="Beneficiary:", theme_text_color="Secondary", font_style="Caption"))
-        self.person_grid = MDGridLayout(cols=2, spacing="10dp", adaptive_height=True)
-        
-        self.btn_akshay = MDFillRoundFlatIconButton(text="Akshay", icon="account", size_hint_x=1, on_release=lambda x: self.set_person("Akshay"))
-        self.btn_monika = MDFillRoundFlatIconButton(text="Monika", icon="account-heart", size_hint_x=1, on_release=lambda x: self.set_person("Monika"))
-        self.btn_abhi = MDFillRoundFlatIconButton(text="Abhimanyu", icon="baby-face", size_hint_x=1, on_release=lambda x: self.set_person("Abhimanyu"))
-        self.btn_family = MDFillRoundFlatIconButton(text="Family", icon="home-group", size_hint_x=1, on_release=lambda x: self.set_person("Family"))
-        
-        # Initially empty, filled on login
-        layout_add.add_widget(self.person_grid)
-
-        # 4. Inputs
-        self.amount_input = MDTextField(hint_text="Amount", icon_right="currency-inr", mode="rectangle")
+        self.amount_input = MDTextField(hint_text="Amount", icon_right="currency-inr", mode="rectangle", input_filter="int")
         layout_add.add_widget(self.amount_input)
+
+        self.category_input = MDTextField(hint_text="Category (Food/Rent/etc.)", icon_right="tag", mode="rectangle")
+        layout_add.add_widget(self.category_input)
+
         self.desc_input = MDTextField(hint_text="Description", icon_right="notebook-edit", mode="rectangle")
         layout_add.add_widget(self.desc_input)
 
@@ -120,6 +102,7 @@ class FamilyExpenseApp(MDApp):
         btn_save.md_bg_color = self.theme_cls.primary_color
         btn_save.bind(on_release=self.send_data)
         layout_add.add_widget(btn_save)
+
         self.status_label = MDLabel(text="Ready", halign="center", theme_text_color="Hint", font_style="Caption")
         layout_add.add_widget(self.status_label)
 
@@ -127,205 +110,209 @@ class FamilyExpenseApp(MDApp):
         self.screen_add.add_widget(scroll_add)
 
         # --- TAB 2: DASHBOARD ---
-        self.screen_dash = MDBottomNavigationItem(name='screen2', text='Analytics', icon='chart-bar', on_tab_press=self.refresh_dashboard)
-        
+        self.screen_dash = MDBottomNavigationItem(name='screen_analytics', text='Analytics', icon='chart-bar',
+                                                  on_tab_press=self.refresh_dashboard)
+
         scroll_dash = MDScrollView()
-        layout_dash = MDBoxLayout(orientation='vertical', padding="15dp", spacing="15dp", adaptive_height=True)
-        
-        # Monthly Cards
-        layout_dash.add_widget(MDLabel(text="Monthly Analysis", font_style="H6", bold=True))
-        month_grid = MDGridLayout(cols=2, spacing="10dp", adaptive_height=True)
-        
-        card_m_inc = MDCard(orientation='vertical', padding="10dp", radius=[10], md_bg_color=(0.9, 1, 0.9, 1), size_hint_y=None, height="80dp")
-        card_m_inc.add_widget(MDLabel(text="INCOME", font_style="Overline", halign="center"))
-        self.lbl_month_inc = MDLabel(text="0", font_style="H6", halign="center", bold=True, theme_text_color="Custom", text_color="green")
-        card_m_inc.add_widget(self.lbl_month_inc)
-        
-        card_m_exp = MDCard(orientation='vertical', padding="10dp", radius=[10], md_bg_color=(1, 0.9, 0.9, 1), size_hint_y=None, height="80dp")
-        card_m_exp.add_widget(MDLabel(text="EXPENSE", font_style="Overline", halign="center"))
-        self.lbl_month_exp = MDLabel(text="0", font_style="H6", halign="center", bold=True, theme_text_color="Custom", text_color="red")
-        card_m_exp.add_widget(self.lbl_month_exp)
-        
-        month_grid.add_widget(card_m_inc); month_grid.add_widget(card_m_exp)
-        layout_dash.add_widget(month_grid)
+        dash_layout = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
+        dash_layout.bind(minimum_height=dash_layout.setter('height'))
 
-        # Yearly Card
-        layout_dash.add_widget(MDLabel(text="Yearly Analysis", font_style="H6", bold=True))
-        card_y = MDCard(orientation='vertical', padding="15dp", radius=[10], md_bg_color=(0.9, 0.9, 1, 1), size_hint_y=None, height="90dp")
-        card_y.add_widget(MDLabel(text="TOTAL SPENT THIS YEAR", font_style="Overline", halign="center"))
-        self.lbl_year_exp = MDLabel(text="Rs 0", font_style="H4", halign="center", bold=True, theme_text_color="Primary")
-        card_y.add_widget(self.lbl_year_exp)
-        layout_dash.add_widget(card_y)
+        self.lbl_month_exp = MDLabel(text="Monthly Expense: ₹0", font_style="H6", halign="center")
+        dash_layout.add_widget(self.lbl_month_exp)
 
-        # Charts
-        layout_dash.add_widget(MDLabel(text="Who Spent What? (Monthly)", font_style="H6", bold=True))
-        self.chart_box = MDBoxLayout(orientation='vertical', spacing="8dp", adaptive_height=True)
-        layout_dash.add_widget(self.chart_box)
+        self.lbl_savings = MDLabel(text="Savings: ₹0", font_style="H6", halign="center")
+        dash_layout.add_widget(self.lbl_savings)
 
-        # History List
-        layout_dash.add_widget(MDLabel(text="Recent Transactions", font_style="H6", bold=True))
-        self.history_list = MDList()
-        layout_dash.add_widget(self.history_list)
+        dash_layout.add_widget(MDLabel(text="Expense Distribution", font_style="Subtitle1"))
+        self.chart_box = MDBoxLayout(orientation='vertical', spacing="10dp", size_hint_y=None)
+        self.chart_box.bind(minimum_height=self.chart_box.setter('height'))
+        dash_layout.add_widget(self.chart_box)
 
-        scroll_dash.add_widget(layout_dash)
+        scroll_dash.add_widget(dash_layout)
         self.screen_dash.add_widget(scroll_dash)
 
-        self.nav_bar.add_widget(self.screen_add); self.nav_bar.add_widget(self.screen_dash)
-        main_layout.add_widget(self.nav_bar)
-        self.main_screen.add_widget(main_layout)
-        self.sm.add_widget(self.main_screen)
-        
-        self.selected_type = "Expense"
+        # --- TAB 3: HISTORY ---
+        self.screen_history = MDBottomNavigationItem(name='screen_history', text='History', icon='history')
+
+        scroll_hist = MDScrollView()
+        hist_layout = MDBoxLayout(orientation='vertical', padding="20dp", spacing="15dp", size_hint_y=None)
+        hist_layout.bind(minimum_height=hist_layout.setter('height'))
+
+        # Filter Row
+        filter_row = MDBoxLayout(orientation='horizontal', spacing="10dp", size_hint_y=None, height="60dp")
+
+        self.date_input = MDTextField(hint_text="Select Date", mode="rectangle", readonly=True)
+        self.date_input.bind(on_focus=self.show_date_picker)
+        filter_row.add_widget(self.date_input)
+
+        btn_filter = MDRectangleFlatIconButton(text="Filter", icon="filter", size_hint_x=None, width="120dp")
+        btn_filter.bind(on_release=self.filter_history)
+        filter_row.add_widget(btn_filter)
+
+        hist_layout.add_widget(filter_row)
+
+        # History list
+        self.history_list = MDList()
+        scroll_hist.add_widget(self.history_list)
+
+        self.screen_history.add_widget(scroll_hist)
+
+        # Add all tabs
+        nav.add_widget(self.screen_add)
+        nav.add_widget(self.screen_dash)
+        nav.add_widget(self.screen_history)
+
+        root_layout.add_widget(nav)
+        main_screen.add_widget(root_layout)
+
+        self.sm.add_widget(main_screen)
+
         return self.sm
 
-    # --- DATE PICKER LOGIC ---
-    def show_date_picker(self, instance):
-        date_dialog = MDDatePicker()
-        date_dialog.bind(on_save=self.on_date_save)
-        date_dialog.open()
+    # ==========================
+    # LOGIN
+    # ==========================
+    def login_user(self, instance):
+        global CURRENT_USER
+        user = self.login_username.text.strip()
+        if user in ["Akshay", "Monika", "Abhimanyu"]:
+            CURRENT_USER = user
+            toast(f"Welcome {user}")
+            self.sm.current = "main"
+        else:
+            toast("Invalid User")
 
-    def on_date_save(self, instance, value, date_range):
-        self.selected_date_obj = value
-        self.btn_date.text = f"Date: {value}"
-
-    # --- LOGIN LOGIC ---
-    def check_login(self, obj):
-        user = self.login_user.text.strip()
-        pwd = self.login_pass.text.strip()
+    # ==========================
+    # SEND DATA TO GOOGLE SHEET
+    # ==========================
+    def send_data(self, instance):
         global CURRENT_USER
 
-        if (user == "Akshay" and pwd == "1234") or (user == "Monika" and pwd == "5678"):
-            CURRENT_USER = user
-            self.toolbar.title = f"Welcome {user}"
-            self.setup_ui_for_user(user) # NEW FUNCTION TO HIDE BUTTONS
-            self.sm.current = 'main'
-        else:
-            toast("Invalid Credentials")
+        amount = self.amount_input.text.strip()
+        category = self.category_input.text.strip()
+        desc = self.desc_input.text.strip()
 
-    def setup_ui_for_user(self, user):
-        # 1. Clear existing buttons
-        self.person_grid.clear_widgets()
-        
-        # 2. Add buttons based on who is logged in
-        if user == "Akshay":
-            self.person_grid.add_widget(self.btn_akshay)
-            self.person_grid.add_widget(self.btn_abhi)
-            self.person_grid.add_widget(self.btn_family)
-            self.set_person("Akshay") # Auto select self
-        
-        elif user == "Monika":
-            self.person_grid.add_widget(self.btn_monika)
-            self.person_grid.add_widget(self.btn_abhi)
-            self.person_grid.add_widget(self.btn_family)
-            self.set_person("Monika") # Auto select self
+        if not amount or not category:
+            toast("Enter amount & category")
+            return
 
-    def logout(self):
-        self.sm.current = 'login'
-        self.login_pass.text = ""
+        data = {
+            "user": CURRENT_USER,
+            "amount": amount,
+            "category": category,
+            "desc": desc,
+            "date": str(date.today()),
+            "time": datetime.now().strftime("%H:%M:%S"),
+        }
 
-    # --- SELECTION LOGIC ---
-    def set_type_expense(self, x): 
-        self.selected_type="Expense"
-        self.btn_expense.md_bg_color=(1, 0.3, 0.3, 1); self.btn_expense.text_color=(1,1,1,1)
-        self.btn_income.md_bg_color=(0.9, 0.9, 0.9, 1); self.btn_income.text_color=(0,0,0,0.5)
-
-    def set_type_income(self, x): 
-        self.selected_type="Income"
-        self.btn_income.md_bg_color=(0.3, 0.8, 0.3, 1); self.btn_income.text_color=(1,1,1,1)
-        self.btn_expense.md_bg_color=(0.9, 0.9, 0.9, 1); self.btn_expense.text_color=(0,0,0,0.5)
-    
-    def set_person(self, name):
-        self.selected_person = name
-        btns = [self.btn_akshay, self.btn_monika, self.btn_abhi, self.btn_family]
-        for btn in btns: 
-            btn.md_bg_color=(0.95, 0.95, 0.95, 1); btn.text_color=(0,0,0,0.7); btn.elevation=0
-        
-        target = self.btn_akshay 
-        if name=="Monika": target=self.btn_monika
-        elif name=="Abhimanyu": target=self.btn_abhi
-        elif name=="Family": target=self.btn_family
-        target.md_bg_color=self.theme_cls.primary_color; target.text_color=(1,1,1,1); target.elevation=3
-
-    # --- SAVE DATA ---
-    def send_data(self, obj):
-        if not self.amount_input.text or not self.desc_input.text: self.status_label.text="Please fill Amount & Description"; return
-        self.status_label.text="Saving..."
         try:
-            date_to_send = str(self.selected_date_obj)
-            payload = {'date':date_to_send, 'amount':self.amount_input.text, 'desc':self.desc_input.text, 'user':self.selected_person, 'type':self.selected_type}
-            requests.post(GOOGLE_SCRIPT_URL, params=payload)
-            self.status_label.text="Saved!"; self.amount_input.text=""; self.desc_input.text=""
-        except: self.status_label.text="Network Error"
+            self.status_label.text = "Saving..."
+            response = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15)
 
-    # --- DASHBOARD LOGIC ---
-    def refresh_dashboard(self, obj):
+            if response.status_code == 200:
+                toast("Saved Successfully ✅")
+                self.amount_input.text = ""
+                self.category_input.text = ""
+                self.desc_input.text = ""
+                self.status_label.text = "Saved ✅"
+            else:
+                toast("Error Saving ❌")
+                self.status_label.text = "Error"
+
+        except Exception as e:
+            toast("Network Error")
+            self.status_label.text = "Network Error"
+            print("Send Error:", e)
+
+    # ==========================
+    # DATE PICKER
+    # ==========================
+    def show_date_picker(self, instance, value):
+        if value:
+            picker = MDDatePicker()
+            picker.bind(on_save=self.set_date)
+            picker.open()
+
+    def set_date(self, instance, value, date_range):
+        self.date_input.text = str(value)
+
+    # ==========================
+    # FILTER HISTORY
+    # ==========================
+    def filter_history(self, instance):
+        sel_date = self.date_input.text.strip()
+        if not sel_date:
+            toast("Select date first")
+            return
+
         try:
-            self.lbl_month_exp.text = "..."
-            data = requests.get(GOOGLE_SCRIPT_URL).json()
-            
-            today = date.today()
-            curr_month = today.month
-            curr_year = today.year
-            m_inc = 0; m_exp = 0; y_exp = 0
-            dist_data = {"Akshay": 0, "Monika": 0, "Abhimanyu": 0, "Family": 0}
-
             self.history_list.clear_widgets()
-            recent_count = 0
-            
-            for row in reversed(data):
-                if len(row)<5: continue
-                
-                raw_date = str(row[0]).split("T")[0]
-                try:
-                    row_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-                    display_date = row_date.strftime("%d %b")
-                except: continue 
+            response = requests.get(GOOGLE_SCRIPT_URL + f"?action=history&date={sel_date}", timeout=15)
+            data = response.json()
 
-                amt = float(row[1])
-                desc = str(row[2])
-                user = str(row[3])
-                typ = str(row[4])
+            if len(data) == 0:
+                toast("No entries found")
+                return
 
-                # PRIVACY FILTER (DEFAULTY VIEW)
-                if CURRENT_USER == "Akshay" and user == "Monika": continue
-                if CURRENT_USER == "Monika" and user == "Akshay": continue
+            for row in data:
+                item = TwoLineAvatarIconListItem(
+                    text=f"₹{row['amount']} - {row['category']}",
+                    secondary_text=f"{row['user']} | {row['desc']}"
+                )
+                item.add_widget(IconLeftWidget(icon="cash"))
+                self.history_list.add_widget(item)
 
-                # Year Total
-                if row_date.year == curr_year and typ == "Expense": y_exp += amt
+        except Exception as e:
+            toast("Error loading history")
+            print("History Error:", e)
 
-                # Month Total
-                if row_date.year == curr_year and row_date.month == curr_month:
-                    if typ == "Income": m_inc += amt
-                    else: 
-                        m_exp += amt
-                        if user in dist_data: dist_data[user] += amt
+    # ==========================
+    # DASHBOARD
+    # ==========================
+    def refresh_dashboard(self, *args):
+        try:
+            response = requests.get(GOOGLE_SCRIPT_URL + "?action=dashboard", timeout=15)
+            data = response.json()
 
-                # List
-                if recent_count < 30:
-                    icon = "arrow-up-bold-circle" if typ == "Income" else "arrow-down-bold-circle"
-                    color = (0, 0.7, 0, 1) if typ == "Income" else (0.8, 0, 0, 1)
-                    
-                    item = TwoLineAvatarIconListItem(text=f"Rs {int(amt)} - {desc}", secondary_text=f"{display_date} | {user}")
-                    item.add_widget(IconLeftWidget(icon=icon, theme_text_color="Custom", text_color=color))
-                    self.history_list.add_widget(item)
-                    recent_count += 1
+            m_exp = float(data.get("monthly_expense", 0))
+            savings = float(data.get("savings", 0))
+            dist_data = data.get("distribution", {})
 
-            self.lbl_month_inc.text = f"Rs {int(m_inc)}"
-            self.lbl_month_exp.text = f"Rs {int(m_exp)}"
-            self.lbl_year_exp.text = f"Rs {int(y_exp)}"
+            self.lbl_month_exp.text = f"Monthly Expense: ₹{m_exp}"
+            self.lbl_savings.text = f"Savings: ₹{savings}"
 
             self.chart_box.clear_widgets()
-            colors = {"Akshay": (0.2, 0.2, 1, 1), "Monika": (1, 0.4, 0.7, 1), "Abhimanyu": (1, 0.6, 0.2, 1), "Family": (0, 0.5, 0.5, 1)}
-            
+            colors = {
+                "Akshay": (0.2, 0.2, 1, 1),
+                "Monika": (1, 0.4, 0.7, 1),
+                "Abhimanyu": (1, 0.6, 0.2, 1),
+                "Family": (0, 0.5, 0.5, 1),
+            }
+
             for name, val in dist_data.items():
                 if val > 0:
                     percent = (val / m_exp) * 100 if m_exp > 0 else 0
-                    self.chart_box.add_widget(MDLabel(text=f"{name}: {int(percent)}% (Rs {int(val)})", font_style="Caption", size_hint_y=None, height="20dp"))
-                    self.chart_box.add_widget(MDProgressBar(value=percent, color=colors.get(name, (0,0,1,1)), size_hint_y=None, height="15dp"))
+                    self.chart_box.add_widget(
+                        MDLabel(
+                            text=f"{name}: ₹{val} ({percent:.1f}%)",
+                            font_style="Caption",
+                            size_hint_y=None,
+                            height="20dp",
+                        )
+                    )
+                    self.chart_box.add_widget(
+                        MDProgressBar(
+                            value=percent,
+                            color=colors.get(name, (0, 0, 1, 1)),
+                            size_hint_y=None,
+                            height="15dp",
+                        )
+                    )
 
         except Exception as e:
             self.lbl_month_exp.text = "Error"
             print("Dashboard Error:", e)
+
 
 if __name__ == '__main__':
     FamilyExpenseApp().run()
