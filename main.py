@@ -1,15 +1,7 @@
 from kivymd.app import MDApp
 
-# ✅ safer imports (some KivyMD versions change these)
-try:
-    from kivymd.uix.screen import Screen
-except Exception:
-    from kivy.uix.screenmanager import Screen
-
-try:
-    from kivymd.uix.screenmanager import ScreenManager
-except Exception:
-    from kivy.uix.screenmanager import ScreenManager
+# ✅ Use Kivy Screen/ScreenManager (more stable on Android builds)
+from kivy.uix.screenmanager import Screen, ScreenManager
 
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDFillRoundFlatIconButton, MDRectangleFlatIconButton
@@ -21,12 +13,18 @@ from kivymd.uix.card import MDCard
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.list import MDList, TwoLineAvatarIconListItem, IconLeftWidget
 from kivymd.uix.progressbar import MDProgressBar
-from kivymd.uix.toolbar import MDTopAppBar
+
+# ✅ Toolbar fallback (some versions)
+try:
+    from kivymd.uix.toolbar import MDTopAppBar
+except Exception:
+    from kivymd.uix.toolbar import MDToolbar as MDTopAppBar
+
 from kivymd.uix.pickers import MDDatePicker
 from kivymd.toast import toast
 
 import requests
-import certifi  # ✅ SSL certificate fix for Android
+import certifi
 from datetime import date, datetime
 
 # ==========================================
@@ -49,7 +47,7 @@ class MainAppScreen(Screen):
 class FamilyExpenseApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Indigo"
-        # ✅ some versions may not have accent_palette
+        # ✅ Some versions may not have accent_palette
         if hasattr(self.theme_cls, "accent_palette"):
             self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
@@ -63,7 +61,10 @@ class FamilyExpenseApp(MDApp):
         layout_login = MDBoxLayout(orientation='vertical', padding="40dp", spacing="20dp")
 
         layout_login.add_widget(MDLabel(text="", size_hint_y=None, height="50dp"))
-        layout_login.add_widget(MDLabel(text="Family Finance", halign="center", font_style="H4", bold=True))
+
+        # ✅ Removed bold=True (causes crash). Using markup instead.
+        layout_login.add_widget(MDLabel(text="[b]Family Finance[/b]", markup=True,
+                                        halign="center", font_style="H4"))
         layout_login.add_widget(MDLabel(text="Secure Login", halign="center",
                                         theme_text_color="Hint", font_style="Caption"))
 
@@ -88,7 +89,12 @@ class FamilyExpenseApp(MDApp):
         main_layout = MDBoxLayout(orientation='vertical')
 
         # Toolbar
-        self.toolbar = MDTopAppBar(title="Home", elevation=4, md_bg_color=self.theme_cls.primary_color)
+        self.toolbar = MDTopAppBar(title="Home", elevation=4)
+        try:
+            self.toolbar.md_bg_color = self.theme_cls.primary_color
+        except Exception:
+            pass
+
         self.toolbar.right_action_items = [
             ["refresh", lambda x: self.refresh_dashboard(None)],
             ["logout", lambda x: self.logout()]
@@ -146,7 +152,7 @@ class FamilyExpenseApp(MDApp):
         layout_add.add_widget(self.person_grid)  # will be filled after login
 
         # 4. Inputs
-        self.amount_input = MDTextField(hint_text="Amount", icon_right="currency-inr", mode="rectangle")
+        self.amount_input = MDTextField(hint_text="Amount", icon_right="currency-inr", mode="rectangle", input_filter="int")
         layout_add.add_widget(self.amount_input)
 
         self.desc_input = MDTextField(hint_text="Description", icon_right="notebook-edit", mode="rectangle")
@@ -171,20 +177,20 @@ class FamilyExpenseApp(MDApp):
         layout_dash = MDBoxLayout(orientation='vertical', padding="15dp", spacing="15dp", adaptive_height=True)
 
         # Monthly Cards
-        layout_dash.add_widget(MDLabel(text="Monthly Analysis", font_style="H6", bold=True))
+        layout_dash.add_widget(MDLabel(text="[b]Monthly Analysis[/b]", markup=True, font_style="H6"))
         month_grid = MDGridLayout(cols=2, spacing="10dp", adaptive_height=True)
 
         card_m_inc = MDCard(orientation='vertical', padding="10dp", radius=[10],
                             md_bg_color=(0.9, 1, 0.9, 1), size_hint_y=None, height="80dp")
         card_m_inc.add_widget(MDLabel(text="INCOME", font_style="Overline", halign="center"))
-        self.lbl_month_inc = MDLabel(text="0", font_style="H6", halign="center", bold=True,
+        self.lbl_month_inc = MDLabel(text="0", font_style="H6", halign="center",
                                      theme_text_color="Custom", text_color="green")
         card_m_inc.add_widget(self.lbl_month_inc)
 
         card_m_exp = MDCard(orientation='vertical', padding="10dp", radius=[10],
                             md_bg_color=(1, 0.9, 0.9, 1), size_hint_y=None, height="80dp")
         card_m_exp.add_widget(MDLabel(text="EXPENSE", font_style="Overline", halign="center"))
-        self.lbl_month_exp = MDLabel(text="0", font_style="H6", halign="center", bold=True,
+        self.lbl_month_exp = MDLabel(text="0", font_style="H6", halign="center",
                                      theme_text_color="Custom", text_color="red")
         card_m_exp.add_widget(self.lbl_month_exp)
 
@@ -193,22 +199,22 @@ class FamilyExpenseApp(MDApp):
         layout_dash.add_widget(month_grid)
 
         # Yearly Card
-        layout_dash.add_widget(MDLabel(text="Yearly Analysis", font_style="H6", bold=True))
+        layout_dash.add_widget(MDLabel(text="[b]Yearly Analysis[/b]", markup=True, font_style="H6"))
         card_y = MDCard(orientation='vertical', padding="15dp", radius=[10],
                         md_bg_color=(0.9, 0.9, 1, 1), size_hint_y=None, height="90dp")
         card_y.add_widget(MDLabel(text="TOTAL SPENT THIS YEAR", font_style="Overline", halign="center"))
-        self.lbl_year_exp = MDLabel(text="Rs 0", font_style="H4", halign="center", bold=True,
+        self.lbl_year_exp = MDLabel(text="Rs 0", font_style="H4", halign="center",
                                     theme_text_color="Primary")
         card_y.add_widget(self.lbl_year_exp)
         layout_dash.add_widget(card_y)
 
         # Charts
-        layout_dash.add_widget(MDLabel(text="Who Spent What? (Monthly)", font_style="H6", bold=True))
+        layout_dash.add_widget(MDLabel(text="[b]Who Spent What? (Monthly)[/b]", markup=True, font_style="H6"))
         self.chart_box = MDBoxLayout(orientation='vertical', spacing="8dp", adaptive_height=True)
         layout_dash.add_widget(self.chart_box)
 
         # History List
-        layout_dash.add_widget(MDLabel(text="Recent Transactions", font_style="H6", bold=True))
+        layout_dash.add_widget(MDLabel(text="[b]Recent Transactions[/b]", markup=True, font_style="H6"))
         self.history_list = MDList()
         layout_dash.add_widget(self.history_list)
 
@@ -305,7 +311,7 @@ class FamilyExpenseApp(MDApp):
         target.text_color = (1, 1, 1, 1)
         target.elevation = 3
 
-    # --- SAVE DATA (✅ Android-safe) ---
+    # --- SAVE DATA (✅ fixed) ---
     def send_data(self, obj):
         if not self.amount_input.text or not self.desc_input.text:
             self.status_label.text = "Please fill Amount & Description"
@@ -323,7 +329,7 @@ class FamilyExpenseApp(MDApp):
                 'type': self.selected_type
             }
 
-            # ✅ form-encoded POST (Apps Script doPost(e).parameter works)
+            # ✅ Send as form body (Apps Script doPost(e).parameter compatible)
             r = requests.post(
                 GOOGLE_SCRIPT_URL,
                 data=payload,
@@ -337,22 +343,20 @@ class FamilyExpenseApp(MDApp):
             self.desc_input.text = ""
 
         except Exception as e:
-            # ✅ show exact error type (helpful)
-            self.status_label.text = f"Network Error: {type(e).__name__}"
+            self.status_label.text = f"Error: {type(e).__name__}"
             print("Send Error:", e)
 
-    # --- DASHBOARD LOGIC (✅ Android-safe) ---
+    # --- DASHBOARD LOGIC (✅ fixed) ---
     def refresh_dashboard(self, obj):
         try:
             self.lbl_month_exp.text = "..."
             r = requests.get(GOOGLE_SCRIPT_URL, timeout=25, verify=certifi.where())
 
-            # Sometimes script returns HTML if not public
             try:
                 data = r.json()
             except Exception:
                 self.lbl_month_exp.text = "Script not returning JSON"
-                print("Response text (first 300):", r.text[:300])
+                print("Response (first 300):", r.text[:300])
                 return
 
             today = date.today()
@@ -369,7 +373,6 @@ class FamilyExpenseApp(MDApp):
 
             if not isinstance(data, list):
                 self.lbl_month_exp.text = "Invalid data format"
-                print("Dashboard data type:", type(data), data)
                 return
 
             for row in reversed(data):
